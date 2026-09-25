@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { MessageType, type PageContextResponse } from '../messaging/messages';
+import { jobRepository } from '../storage';
 
 // Stage 1: 显示当前页面上下文（title / URL / 文本片段）
 // 岗位识别（Stage 2）尚未接入，因此状态常驻「暂未识别到招聘详情页」
+// Stage 5: 增加「打开岗位库」入口 + 已保存岗位数
 
 interface PageInfo {
   title: string;
@@ -14,7 +16,7 @@ export default function App() {
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const savedCount = 0;
+  const [savedCount, setSavedCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,10 +51,19 @@ export default function App() {
       }
     );
 
+    // 读取已保存岗位数
+    jobRepository.count().then((n) => {
+      if (!cancelled) setSavedCount(n);
+    });
+
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const openDashboard = () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
+  };
 
   return (
     <div className="app">
@@ -96,6 +107,9 @@ export default function App() {
 
       <footer className="footer">
         <span>已保存：{savedCount} 个岗位</span>
+        <button className="footer__btn" onClick={openDashboard}>
+          打开岗位库
+        </button>
       </footer>
     </div>
   );

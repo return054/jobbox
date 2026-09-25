@@ -1,21 +1,22 @@
-// 岗位仓储：CRUD + 内存搜索
+// 岗位仓储：CRUD + 内存搜索 + 标签/状态/备注操作
 // 设计要点：
 //   1. 单 key 持久化整个 Job[]（chrome.storage.local 容量 10MB，1000 条岗位 ~1MB，足够）
 //   2. 所有查询在内存里做（一次 getAll 全量加载，filter/sort 都在 JS 数组上）
 //   3. save/saveAll 用 upsert 语义：相同 id 覆盖，否则追加
 //   4. Job.id 缺失时，Repository 用 sourceUrl 的 djb2 hash 兜底生成
+//   5. Stage 5: 支持 status/tags/autoTags/notes 的原子更新；搜索扩展到 8 个维度
 //
-// 性能验收（Issue #5）：
+// 性能验收（Issue #5 / #6）：
 //   - 1000 条数据搜索无明显卡顿：search 全内存过滤，单次 < 5ms
-//   - 单次 save = getAll + 修改 + setAll，1000 条下 ~3-5ms
+//   - 单次 update = getAll + 修改 + setAll，1000 条下 ~3-5ms
 
-import type { Job } from '../types/job';
+import type { Job, JobStatus } from '../types/job';
 import type { KVStorage } from './storage-adapter';
 import { StorageKey } from './storage-adapter';
 
-/** 搜索条件 */
+/** 搜索条件（Stage 5 扩展） */
 export interface JobSearchQuery {
-  /** 关键词（在 title + company + description 中匹配，大小写不敏感） */
+  /** 关键词：在 title + company + description + tags + autoTags + notes 中匹配 */
   keyword?: string;
   /** 城市：匹配 normalized.location.city，或 location 字符串包含 */
   city?: string;
@@ -23,6 +24,18 @@ export interface JobSearchQuery {
   salaryMin?: number;
   /** 最高月薪（元），用 normalized.salary.max 比较 */
   salaryMax?: number;
+  /** 学历：匹配 normalized.education.level */
+  education?: string;
+  /** 最低经验年限：匹配 normalized.experience.min */
+  experienceMin?: number;
+  /** 最高经验年限：匹配 normalized.experience.max（0 表示不限） */
+  experienceMax?: number;
+  /** 申请状态：精确匹配 Job.status */
+  status?: JobStatus;
+  /** 标签：匹配用户 tags（OR 语义，命中任一即可） */
+  tags?: string[];
+  /** 来源平台：精确匹配 Job.source */
+  source?: string;
   /** 返回条数上限，默认 50 */
   limit?: number;
   /** 偏移量，默认 0 */
@@ -67,7 +80,7 @@ export class JobRepository {
     const id = hashIdOf(job);
     const jobs = await this.getAll();
     const idx = jobs.findIndex((j) => j.id === id);
-    const next: Job = { ...job, id };
+    const next: Job = { ...job, id, updatedAt: job.updatedAt ?? Date.now() };
     if (idx >= 0) {
       jobs[idx] = next;
     } else {
@@ -86,7 +99,7 @@ export class JobRepository {
     }
     for (const j of jobs) {
       const id = hashIdOf(j);
-      byId.set(id, { ...j, id });
+      byId.set(id, { ...j, id, updatedAt: j.updatedAt ?? Date.now() });
     }
     await this.storage.set(StorageKey.JOBS, Array.from(byId.values()));
   }
@@ -111,14 +124,83 @@ export class JobRepository {
   }
 
   /**
+   * 通用局部更新：内部使用，外部调用专用方法（updateStatus 等）
+   * updater 返回新 Job，若返回原引用则不写入（无变化优化）
+   */
+  private async update(id: string, updater: (job: Job) => Job): Promise<Job | null> {
+    const jobs = await this.getAll();
+    const idx = jobs.findIndex((j) => j.id === id);
+    if (idx < 0) return null;
+    const original = jobs[idx];
+    const updated = updater(original);
+    if (updated === original) return original; // 无变化
+    jobs[idx] = { ...updated, updatedAt: Date.now() };
+    await this.storage.set(StorageKey.JOBS, jobs);
+    return jobs[idx];
+  }
+
+  /** 更新申请状态 */
+  async updateStatus(id: string, status: JobStatus): Promise<Job | null> {
+    return this.update(id, (j) => (j.status === status ? j : { ...j, status }));
+  }
+
+  /** 添加用户标签（去重，忽略空白） */
+  async addTag(id: string, tag: string): Promise<Job | null> {
+    const trimmed = tag.trim();
+    if (!trimmed) return null;
+    return this.update(id, (j) => {
+      const tags = new Set(j.tags ?? []);
+      if (tags.has(trimmed)) return j;
+      tags.add(trimmed);
+      return { ...j, tags: Array.from(tags) };
+    });
+  }
+
+  /** 移除用户标签 */
+  async removeTag(id: string, tag: string): Promise<Job | null> {
+    return this.update(id, (j) => {
+      if (!j.tags?.includes(tag)) return j;
+      return { ...j, tags: j.tags.filter((t) => t !== tag) };
+    });
+  }
+
+  /** 全量替换用户标签 */
+  async setTags(id: string, tags: string[]): Promise<Job | null> {
+    const cleaned = Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean)));
+    return this.update(id, (j) => {
+      const current = j.tags ?? [];
+      if (arraysEqual(current, cleaned)) return j;
+      return { ...j, tags: cleaned };
+    });
+  }
+
+  /** 设置自动标签（系统生成，用户不可编辑，与用户 tags 分离） */
+  async setAutoTags(id: string, autoTags: string[]): Promise<Job | null> {
+    return this.update(id, (j) => {
+      if (arraysEqual(j.autoTags ?? [], autoTags)) return j;
+      return { ...j, autoTags };
+    });
+  }
+
+  /** 更新备注 */
+  async updateNotes(id: string, notes: string): Promise<Job | null> {
+    return this.update(id, (j) => (j.notes === notes ? j : { ...j, notes }));
+  }
+
+  /**
    * 在内存里搜索岗位
    * 性能：1000 条全字段过滤 < 5ms（与 chrome.storage 无关）
    */
   async search(query: JobSearchQuery): Promise<Job[]> {
     const jobs = await this.getAll();
     const filtered = jobs.filter((j) => this.matches(j, query));
-    // 默认按 fetchedAt 倒序
-    filtered.sort((a, b) => b.fetchedAt - a.fetchedAt);
+    // 两级排序：先 updatedAt 倒序（有修改排前），相同则 fetchedAt 倒序
+    filtered.sort((a, b) => {
+      const au = a.updatedAt ?? 0;
+      const bu = b.updatedAt ?? 0;
+      if (bu !== au) return bu - au;
+      return b.fetchedAt - a.fetchedAt;
+    });
     const offset = Math.max(0, query.offset ?? 0);
     const limit = Math.max(1, query.limit ?? DEFAULT_LIMIT);
     return filtered.slice(offset, offset + limit);
@@ -129,7 +211,8 @@ export class JobRepository {
     if (q.keyword) {
       const kw = q.keyword.trim().toLowerCase();
       if (kw) {
-        const hay = `${job.title} ${job.company} ${job.description}`.toLowerCase();
+        const tagStr = [...(job.tags ?? []), ...(job.autoTags ?? [])].join(' ');
+        const hay = `${job.title} ${job.company} ${job.description} ${tagStr} ${job.notes ?? ''}`.toLowerCase();
         if (!hay.includes(kw)) return false;
       }
     }
@@ -144,13 +227,41 @@ export class JobRepository {
     if (q.salaryMin !== undefined || q.salaryMax !== undefined) {
       const sal = job.normalized?.salary;
       if (sal?.parsed) {
-        // 语义：用户希望月薪至少 salaryMin → 岗位下限 < salaryMin 则排除
-        //       用户希望月薪至多 salaryMax → 岗位上限 > salaryMax 则排除
         if (q.salaryMin !== undefined && sal.min < q.salaryMin) return false;
         if (q.salaryMax !== undefined && sal.max > q.salaryMax) return false;
       }
-      // normalized 缺失或未解析时不参与薪资过滤（避免误删）
+    }
+    if (q.education) {
+      const edu = job.normalized?.education?.level;
+      if (edu && edu !== q.education) return false;
+    }
+    if (q.experienceMin !== undefined || q.experienceMax !== undefined) {
+      const exp = job.normalized?.experience;
+      if (exp?.parsed) {
+        if (q.experienceMin !== undefined && exp.min < q.experienceMin) return false;
+        // exp.max === 0 表示不限上限，不应被 experienceMax 过滤
+        if (q.experienceMax !== undefined && exp.max > 0 && exp.max > q.experienceMax) return false;
+      }
+    }
+    if (q.status) {
+      if ((job.status ?? 'saved') !== q.status) return false;
+    }
+    if (q.tags && q.tags.length > 0) {
+      const jobTags = job.tags ?? [];
+      // OR 语义：命中任一选中标签即匹配
+      const hit = q.tags.some((t) => jobTags.includes(t));
+      if (!hit) return false;
+    }
+    if (q.source) {
+      if (job.source !== q.source) return false;
     }
     return true;
   }
+}
+
+/** 数组内容相等判断（无序无关，用于 tags 比较） */
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const setA = new Set(a);
+  return b.every((x) => setA.has(x));
 }

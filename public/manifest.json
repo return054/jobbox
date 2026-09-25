@@ -8,6 +8,7 @@
     "default_popup": "popup.html",
     "default_title": "JobBox"
   },
+  "options_page": "dashboard.html",
   "background": {
     "service_worker": "background.js",
     "type": "module"
