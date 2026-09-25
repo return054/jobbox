@@ -13,6 +13,7 @@
 import type { Job, JobStatus } from '../types/job';
 import type { KVStorage } from './storage-adapter';
 import { StorageKey } from './storage-adapter';
+import { interpret } from '../core/interpreter/interpreter';
 
 /** 搜索条件（Stage 5 扩展） */
 export interface JobSearchQuery {
@@ -60,6 +61,17 @@ export function hashIdOf(job: Partial<Job>): string {
   return `u_${djb2(job.sourceUrl ?? '')}`;
 }
 
+/**
+ * Issue #11: 确保岗位有潜台词解读结果
+ * 如果已有 interpretation 则原样返回；否则根据 description 生成
+ * 不修改原 Job，返回新对象
+ */
+function ensureInterpretation(job: Job): Job {
+  if (job.interpretation) return job;
+  if (!job.description?.trim()) return job;
+  return { ...job, interpretation: interpret(job) };
+}
+
 export class JobRepository {
   constructor(private storage: KVStorage) {}
 
@@ -80,7 +92,9 @@ export class JobRepository {
     const id = hashIdOf(job);
     const jobs = await this.getAll();
     const idx = jobs.findIndex((j) => j.id === id);
-    const next: Job = { ...job, id, updatedAt: job.updatedAt ?? Date.now() };
+    // Issue #11: 保存前自动生成潜台词解读（如缺失且有 description）
+    const withInterp = ensureInterpretation(job);
+    const next: Job = { ...withInterp, id, updatedAt: withInterp.updatedAt ?? Date.now() };
     if (idx >= 0) {
       jobs[idx] = next;
     } else {
@@ -99,7 +113,8 @@ export class JobRepository {
     }
     for (const j of jobs) {
       const id = hashIdOf(j);
-      byId.set(id, { ...j, id, updatedAt: j.updatedAt ?? Date.now() });
+      const withInterp = ensureInterpretation(j);
+      byId.set(id, { ...withInterp, id, updatedAt: withInterp.updatedAt ?? Date.now() });
     }
     await this.storage.set(StorageKey.JOBS, Array.from(byId.values()));
   }

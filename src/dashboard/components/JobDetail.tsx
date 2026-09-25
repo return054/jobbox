@@ -11,6 +11,8 @@ import {
   type Job,
   type JobStatus,
 } from '../../types/job';
+import type { InterpretationResult } from '../../core/interpreter/types';
+import { splitByHits, CERTAINTY_COLORS } from '../../utils/highlight';
 
 const STATUSES: JobStatus[] = ['saved', 'applied', 'interview', 'rejected', 'offer'];
 
@@ -45,6 +47,7 @@ export default function JobDetail({
   const status: JobStatus = job.status ?? 'saved';
   const userTags = job.tags ?? [];
   const autoTags = job.autoTags ?? [];
+  const interp: InterpretationResult | undefined = job.interpretation;
 
   const handleAddTag = () => {
     const t = tagInput.trim();
@@ -155,9 +158,86 @@ export default function JobDetail({
           />
         </section>
 
+        {interp && interp.hits.length > 0 && (
+          <section className="detail-panel__section">
+            <h4 className="detail-panel__subtitle">潜台词解读</h4>
+
+            {interp.publicInfo.length > 0 && (
+              <div className="interp-layer interp-layer--a">
+                <div className="interp-layer__title">📌 公开信息（原文明确陈述）</div>
+                {interp.publicInfo.map((h) => (
+                  <div key={`a-${h.phraseId}`} className="interp-item">
+                    <span className="interp-item__phrase" style={{ backgroundColor: CERTAINTY_COLORS[h.certainty] }}>
+                      {h.matchedText}
+                    </span>
+                    <span className="interp-item__text">{h.interpretation}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {interp.commonMeaning.length > 0 && (
+              <div className="interp-layer interp-layer--b">
+                <div className="interp-layer__title">💡 常见含义（行业黑话）</div>
+                {interp.commonMeaning.map((h) => (
+                  <div key={`b-${h.phraseId}`} className="interp-item">
+                    <span className="interp-item__phrase" style={{ backgroundColor: CERTAINTY_COLORS[h.certainty] }}>
+                      {h.matchedText}
+                    </span>
+                    <span className="interp-item__text">{h.interpretation}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {interp.toConfirm.length > 0 && (
+              <div className="interp-layer interp-layer--c">
+                <div className="interp-layer__title">❓ 待确认事项</div>
+                {interp.toConfirm.map((h) => (
+                  <div key={`c-${h.phraseId}`} className="interp-item">
+                    <span className="interp-item__phrase" style={{ backgroundColor: CERTAINTY_COLORS[h.certainty] }}>
+                      {h.matchedText}
+                    </span>
+                    <span className="interp-item__text">{h.interpretation}</span>
+                  </div>
+                ))}
+                {interp.pendingQuestions.length > 0 && (
+                  <div className="interp-questions">
+                    <strong>建议向 HR 确认：</strong>
+                    <ul>
+                      {interp.pendingQuestions.map((q, i) => (
+                        <li key={i}>{q}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="detail-panel__section">
-          <h4 className="detail-panel__subtitle">岗位描述</h4>
-          <p className="detail-panel__desc">{job.description || '（无）'}</p>
+          <h4 className="detail-panel__subtitle">岗位描述{interp && interp.hits.length > 0 ? '（高亮为命中短语）' : ''}</h4>
+          {job.description ? (
+            <p className="detail-panel__desc">
+              {splitByHits(job.description, interp?.hits ?? []).map((seg, i) =>
+                seg.highlight ? (
+                  <mark
+                    key={i}
+                    className="desc-highlight"
+                    style={{ backgroundColor: CERTAINTY_COLORS[seg.certainty ?? 'C'] }}
+                    title={`证据等级：${seg.certainty}`}
+                  >
+                    {seg.text}
+                  </mark>
+                ) : (
+                  <span key={i}>{seg.text}</span>
+                )
+              )}
+            </p>
+          ) : (
+            <p className="detail-panel__desc">（无）</p>
+          )}
         </section>
 
         <footer className="detail-panel__footer">

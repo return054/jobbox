@@ -3,6 +3,7 @@
 
 import type { NormalizedJob } from '../core/normalizer/types';
 import type { ValidationResult } from '../core/validator/validator';
+import type { InterpretationResult } from '../core/interpreter/types';
 
 /**
  * 岗位申请状态机（Stage 5）
@@ -60,10 +61,10 @@ export interface Job {
   /** Stage 3 验证结果（评分/等级/原因） */
   validation?: ValidationResult;
   /**
-   * 潜台词（Issue #11 解析后的自然语言摘要，如"暗示 996 / 大小周"）
-   * Stage 4 只预留字段位，词典数据由 Issue #9 填充
+   * 潜台词解读结果（Issue #11）
+   * 结构化输出，不修改原 Job 字段，向后兼容
    */
-  interpretation?: string;
+  interpretation?: InterpretationResult;
   /**
    * Stage 5: 申请状态，默认 'saved'
    */
