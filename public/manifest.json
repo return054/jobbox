@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "JobBox - 招聘岗位助手",
-  "version": "0.1.0",
-  "description": "一键保存招聘岗位并自动整理信息",
+  "version": "1.0.0",
+  "description": "一键保存招聘岗位，自动整理薪资/地点/学历/经验，支持标签、状态、备注与搜索筛选",
   "permissions": ["activeTab", "scripting", "storage"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "JobBox"
   },
   "options_page": "dashboard.html",
+  "homepage_url": "https://github.com/return054/jobbox/issues",
   "background": {
     "service_worker": "background.js",
     "type": "module"
