@@ -40,6 +40,17 @@ npm run build
 3. 点击「加载已解压的扩展程序」
 4. 选择 `dist/` 目录
 
+### 加载到 Microsoft Edge
+
+Edge 基于 Chromium，原生兼容 Chrome MV3 扩展，可直接加载 JobBox：
+
+1. 打开 `edge://extensions/`
+2. 开启左下角「开发人员模式」开关
+3. 点击「加载解压缩的扩展」
+4. 选择 `dist/` 目录
+
+> 也可通过 [Microsoft Edge Add-ons 商店](https://microsoftedge.microsoft.com/addons/) 分发，提交入口：[Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview)。
+
 ## 使用说明
 
 ### 保存岗位
