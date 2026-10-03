@@ -2,6 +2,26 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式。
 
+## \[1.1.0] - 2026-10-03
+
+### 新增
+
+- **Stage 2: Popup 接入 adapter 引擎,岗位字段提取+卡片渲染+保存入库**
+
+  - `page-context.ts` 内联 zhipin + generic 选择器,在页面上下文直接提取岗位字段
+
+  - `messages.ts` 协议扩展 `PageContextResult.job`,`message-router.ts` 透传 `ctx.job`
+
+  - `popup/App.tsx` 重写:识别岗位时渲染卡片(title/company/薪资/地点/描述)+「保存岗位」按钮
+
+  - 保存调用 `jobRepository.save`,自动生成潜台词解读(ensureInterpretation)
+
+  - 导出 `hasJob` / `buildJobFromPartial` 纯函数,新增 14 个单测
+
+### 变更
+
+- 版本号 1.0.1 → 1.1.0
+
 ## \[1.0.1] - 2026-09-26
 
 ### 新增
