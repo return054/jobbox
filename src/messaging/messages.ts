@@ -1,7 +1,9 @@
 // 消息类型定义：Popup <-> Background <-> Content 的通信协议
 // Stage 6: 失败响应携带 JobBoxErrorCode，便于前端展示对应提示
+// Stage 2: 成功响应携带 partial Job，Popup 据此渲染岗位卡片
 
 import type { JobBoxErrorCode } from '../types/errors';
+import type { Job } from '../types/job';
 
 export const MessageType = {
   GET_PAGE_CONTEXT: 'GET_PAGE_CONTEXT',
@@ -19,6 +21,8 @@ export interface PageContextResult {
   title: string;
   url: string;
   textSnippet: string;
+  /** Stage 2: 从页面 DOM 提取的岗位字段，可能为空对象 */
+  job?: Partial<Job>;
 }
 
 /** 失败响应：返回错误信息 + 错误码 */

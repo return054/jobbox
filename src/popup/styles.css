@@ -127,3 +127,77 @@ body {
 .footer__btn:hover {
   background: #0e42d2;
 }
+
+/* Stage 2: 岗位卡片样式 */
+.job-card {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.job-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2329;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.job-card__company {
+  font-size: 12px;
+  color: #4e5969;
+  margin-top: 4px;
+}
+
+.job-card__meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.job-card__salary {
+  color: #f53f3f;
+  font-weight: 500;
+}
+
+.job-card__location {
+  color: #86909c;
+}
+
+.job-card__desc {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4e5969;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.job-card__save-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  border: 1px solid #165dff;
+  border-radius: 4px;
+  background: #165dff;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.job-card__save-btn:hover:not(:disabled) {
+  background: #0e42d2;
+}
+
+.job-card__save-btn:disabled {
+  background: #94bfff;
+  border-color: #94bfff;
+  cursor: default;
+}

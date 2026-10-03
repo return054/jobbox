@@ -89,9 +89,11 @@ async function handleGetPageContext(
       return;
     }
 
+    const jobFields = ctx.job ? Object.keys(ctx.job).length : 0;
     log.info('页面上下文采集成功', {
       url: ctx.url,
       title: ctx.title,
+      jobFields,
       elapsedMs: Math.round(performance.now() - start),
     });
 
@@ -100,6 +102,7 @@ async function handleGetPageContext(
       title: ctx.title,
       url: ctx.url,
       textSnippet: ctx.textSnippet,
+      job: ctx.job,
     });
   } catch (err) {
     const jbErr = JobBoxError.from(err);
